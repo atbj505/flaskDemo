@@ -1,50 +1,39 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
-import sqlite3
-from contextlib import closing
-
 from flask import (Flask, abort, flash, g, redirect, render_template, request,
                    session, url_for)
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 # configuration
-DATABASE = os.path.join(app.root_path, 'flaskr.db')
-DEBUG = True
-SECRET_KEY = '123456'
-USERNAME = 'admin'
-PASSWORD = '123456'
+app.config['SECRET_KEY'] = 'hard to guess'
+app.config[
+    'SQLALCHEMY_DATABASE_URI'] = 'mysql://root:robert080904@localhost:3306/flaskr?charset=utf8'
+app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
+app.config['USERNAME'] = 'robert'
+app.config['PASSWORD'] = '080904'
 
-app.config.from_object(__name__)
-
-
-def connect_db():
-    return sqlite3.connect(app.config['DATABASE'])
+db = SQLAlchemy(app)
 
 
-def init_db():
-    with closing(connect_db()) as db:
-        with app.open_resource('schema.sql', mode='r') as f:
-            db.cursor().executescript(f.read())
-        db.commit()
+class Entry(db.Model):
+    __tablename__ = 'entries'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(64))
+    text = db.Column(db.String(64))
 
+    def __init__(self, title, text):
+        self.title = title
+        self.text = text
 
-@app.before_request
-def before_request():
-    g.db = connect_db()
-
-
-@app.teardown_request
-def teardown_request(exception):
-    db = getattr(g, 'db', None)
-    if db is not None:
-        db.close()
+    def __repr__(self):
+        return '<Entry %s>' % self.title
 
 
 @app.route('/')
 def show_entries():
-    cur = g.db.execute('select title, text from entries order by id desc')
-    entries = [dict(title=row[0], text=row[1]) for row in cur.fetchall()]
+    entries = Entry.query.order_by(Entry.id)
     return render_template('show_entries.html', entries=entries)
 
 
@@ -52,9 +41,9 @@ def show_entries():
 def add_entry():
     if not session.get('logged_in'):
         abort(401)
-    g.db.execute('insert into entries (title, text) values (?, ?)',
-                 [request.form['title'], request.form['text']])
-    g.db.commit()
+    entry = Entry(request.form['title'], request.form['text'])
+    db.session.add(entry)
+    db.session.commit()
     flash('New entry was successfully posted')
     return redirect(url_for('show_entries'))
 
