@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from flask import (Flask, abort, flash, g, redirect, render_template, request,
                    session, url_for)
+
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
