@@ -7,11 +7,12 @@ from flask import (Flask, abort, current_app, redirect, render_template,
                    request, url_for, session, flash)
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
-from flask_script import Manager, shell
+from flask_script import Manager, Shell
 from flask_wtf import FlaskForm
 from flask_sqlalchemy import SQLAlchemy
 from wtforms import StringField, SubmitField
 from wtforms.validators import Required
+from flask_migrate import Migrate, MigrateCommand
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
@@ -24,6 +25,15 @@ manager = Manager(app)
 bootstrap = Bootstrap(app)
 moment = Moment(app)
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+
+def make_shell_context():
+    return dict(app=app, db=db, User=User, Role=Role)
+
+
+manager.add_command("shell", Shell(make_context=make_shell_context))
+manager.add_command("db", MigrateCommand)
 
 
 class Role(db.Model):
@@ -61,12 +71,22 @@ def index():
     # return render_template('index.html', current_time=datetime.utcnow())
     form = NameForm()
     if form.validate_on_submit():
-        old_name = session.get('name')
-        if old_name and old_name != form.name.data:
-            flash("Look like you have changed your name!")
+        user = User.query.filter_by(username=form.name.data).first()
+        if not user:
+            user = User(username=form.name.data, role_id=1)
+            db.session.add(user)
+            db.session.commit()
+            session['known'] = False
+        else:
+            session['known'] = True
         session['name'] = form.name.data
+        form.name.data = ''
         return redirect(url_for('index'))
-    return render_template('index.html', form=form, name=session.get('name'))
+    return render_template(
+        'index.html',
+        form=form,
+        name=session.get('name'),
+        known=session.get('known'))
 
 
 @app.route('/user/<name>')
